@@ -10,7 +10,7 @@ namespace Configuracoes {
         char * ssidWiFi;
         char * senhaWiFi;
         int codIBGE;
-        time_t ultimaAtt;
+        //time_t ultimaAtt;
 
         Dados() {
             preferences.begin(CONFIGURACOES, true);
@@ -24,7 +24,7 @@ namespace Configuracoes {
             } else {
                 Serial.println("Já existem configurações salvas.");
                 codIBGE = preferences.getInt("codIBGE");
-                ultimaAtt = preferences.getLong64("ultimaAtt");
+                //ultimaAtt = preferences.getLong64("ultimaAtt");
                 preferences.getString("nomeEstacao", nomeEstacao, 128);
                 preferences.getString("senhaWiFi", senhaWiFi, 64);
                 preferences.getString("ssidWiFi", ssidWiFi, 64);

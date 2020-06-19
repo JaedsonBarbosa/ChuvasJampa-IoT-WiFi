@@ -9,6 +9,7 @@
 
 namespace Configuracoes {
     class Gerenciador : SuperEstado {
+        Dados ConfigsAtuais;
         BluetoothSerial SerialBT;
         DynamicJsonDocument * Requisicao;
         DynamicJsonDocument * RetornoInfos;
@@ -17,18 +18,13 @@ namespace Configuracoes {
 
         bool isGPSAtivo;
         bool isConfiguracoesRegistradas;
-        const int PinoAlimentacaoGPS = 13;
         const char* ServidorNTP = "pool.ntp.org";
         const int HorarioBrasilia = -3600 * 3;
 
         public:
-        Dados ConfigsAtuais;
 
         Gerenciador() {
-            pinMode(PinoAlimentacaoGPS, OUTPUT);
-            digitalWrite(PinoAlimentacaoGPS, HIGH);
             configTime(0, HorarioBrasilia, ServidorNTP);
-            time_t now;
             isGPSAtivo = false;
             isConfiguracoesRegistradas = false;
             Requisicao = new DynamicJsonDocument(2048);
@@ -42,8 +38,6 @@ namespace Configuracoes {
         }
 
         void Encerrar() {
-            digitalWrite(PinoAlimentacaoGPS, HIGH);
-            isGPSAtivo = false;
             isConfiguracoesRegistradas = false;
             SerialBT.flush();
             SerialBT.disconnect();
@@ -58,14 +52,6 @@ namespace Configuracoes {
                 const char* metodo = req["metodo"];
                 if (!strcmp(metodo, "GetInfos")) {
                     GetInfos();
-                } else if (!strcmp(metodo, "LigarGPS")) {
-                    isGPSAtivo = true;
-                    digitalWrite(PinoAlimentacaoGPS, !isGPSAtivo);
-                    GetStatus();
-                } else if (!strcmp(metodo, "DesligarGPS")) {
-                    isGPSAtivo = false;
-                    digitalWrite(PinoAlimentacaoGPS, !isGPSAtivo);
-                    GetStatus();
                 } else if (!strcmp(metodo, "SalvarConfigs")) {
                     isConfiguracoesRegistradas = true;
                     Serial.println("Configurações salvas.");
