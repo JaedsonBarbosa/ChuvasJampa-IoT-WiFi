@@ -6,8 +6,6 @@
                 "${workspaceFolder}",
                 "C:\\Users\\jaeds\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\1.0.4\\**",
                 "C:\\Users\\jaeds\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\**",
-                "C:\\Program Files (x86)\\Arduino\\hardware\\tools\\**",
-                "C:\\Program Files (x86)\\Arduino\\libraries\\**",
                 "C:\\Users\\jaeds\\Documents\\Arduino\\libraries\\**"
             ],
             "windowsSdkVersion": "10.0.17763.0",
