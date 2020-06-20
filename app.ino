@@ -7,7 +7,7 @@ const int ONBOARD_LED = 2;
 const int PINO_CONTROLE = 4;
 const String MAC = WiFi.macAddress();
 
-Configuracoes::Gerenciador EstConfiguracoes;
+Configuracoes::Gerenciador  * EstConfiguracoes;
 
 int MakeRequest(HTTPClient * http, String function, std::string content) {
     http->begin("http://192.168.0.108:5001/chuvasjampa/us-central1/" + function);
@@ -20,9 +20,9 @@ int MakeRequest(HTTPClient * http, String function, std::string content) {
 void setup()
 {
     Serial.begin(115200);
-    delay(1000);
-
-    EstConfiguracoes.Iniciar();
+    delay(2000);
+    EstConfiguracoes = new Configuracoes::Gerenciador();
+    EstConfiguracoes->Iniciar();
     return;
 
     pinMode(ONBOARD_LED, OUTPUT);
@@ -42,7 +42,7 @@ void setup()
 
 bool lastEstado = false;
 void loop() {
-    EstConfiguracoes.Executar();
+    EstConfiguracoes->Executar();
     // return;
     // bool estado = digitalRead(PINO_CONTROLE) == HIGH;
     // if (estado && !lastEstado && WiFi.status() == WL_CONNECTED) {

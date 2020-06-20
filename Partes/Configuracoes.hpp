@@ -14,7 +14,7 @@ namespace Configuracoes {
         const char * CONFIGURACOES = "configs";
 
         public:
-        bool isLimpo;
+        bool ativa;
         char * nomeEstacao;
         char * ssidWiFi;
         char * senhaWiFi;
@@ -22,25 +22,31 @@ namespace Configuracoes {
 
         Dados() {
             preferences.begin(CONFIGURACOES, true);
-            isLimpo = ultimaAtt == 0;
-            if (isLimpo) {
-                Serial.println("Não existem configurações salvas.");
-            } else {
-                Serial.println("Já existem configurações salvas.");
-                preferences.getString("nomeEstacao", nomeEstacao, 128);
-                preferences.getString("senhaWiFi", senhaWiFi, 64);
-                preferences.getString("ssidWiFi", ssidWiFi, 64);
+            ativa = preferences.getBool("ativa");
+            if (ativa) {
+                Serial.println("Estacao ativa.");
                 ultimaAtt = preferences.getLong64("ultimaAtt");
+                //Comprimentos máximos determinados pelo IEEE
+                nomeEstacao = new char[32];
+                ssidWiFi = new char[32];
+                senhaWiFi = new char[64];
+                preferences.getString("nomeEstacao", nomeEstacao, 32);
+                preferences.getString("ssidWiFi", ssidWiFi, 32);
+                preferences.getString("senhaWiFi", senhaWiFi, 64);
+            } else {
+                Serial.println("Estacao desativada ou nao configurada.");
             }
             preferences.end();
         }
 
         void Salvar() {
-            preferences.begin(CONFIGURACOES);
+            preferences.begin(CONFIGURACOES, false);
+            preferences.putBool("ativa", ativa);
             preferences.putString("nomeEstacao", nomeEstacao);
             preferences.putString("senhaWiFi", senhaWiFi);
             preferences.putString("ssidWiFi", ssidWiFi);
             preferences.putLong64("ultimaAtt", ultimaAtt);
+            preferences.end();
         }
     };
 
@@ -75,24 +81,11 @@ namespace Configuracoes {
             if (SerialBT.available()) {
                 auto req = *Requisicao;
                 deserializeJson(req, SerialBT);
-                serializeJson(req, Serial);
                 const char* metodo = req["metodo"];
                 if (!strcmp(metodo, "GetInfos")) {
                     GetInfos();
                 } else if (!strcmp(metodo, "SalvarConfigs")) {
-                    ConfigsAtuais.nomeEstacao = strdup(req["nomeEstacao"]);
-                    ConfigsAtuais.senhaWiFi = strdup(req["senhaWiFi"]);
-                    ConfigsAtuais.ssidWiFi = strdup(req["ssidWiFi"]);
-                    Serial.println("Passo 2");
-                    Serial.println("Passo 3");
-                    ConfigsAtuais.isLimpo = false;
-                    Serial.println("Passo 4");
-                    ConfigsAtuais.ultimaAtt = time(0);
-                    Serial.println("Passo 5");
-                    ConfigsAtuais.Salvar();
-                    Serial.println("Passo 6");
-                    Serial.println("Configurações salvas.");
-                    SerialBT.write(1);
+                    SalvarConfigs(&req);
                 }
             }
         }
@@ -101,6 +94,7 @@ namespace Configuracoes {
             auto res = *RetornoInfos;
             res["MAC"] = WiFi.macAddress();
             res["isConectado"] = WiFi.status() == WL_CONNECTED;
+            res["ativa"] = ConfigsAtuais.ativa;
             res["nomeEstacao"] = ConfigsAtuais.nomeEstacao;
             res["ssidWiFi"] = ConfigsAtuais.ssidWiFi;
             res["ultimaAtt"] = ConfigsAtuais.ultimaAtt;
@@ -110,6 +104,16 @@ namespace Configuracoes {
             for (int i = 0; i < quant; i++)
                 redesDisponiveis.add(WiFi.SSID(i));
             serializeJson(res, SerialBT);
+        }
+
+        void SalvarConfigs(DynamicJsonDocument* req) {
+            ConfigsAtuais.nomeEstacao = strdup(req->getMember("nomeEstacao"));
+            ConfigsAtuais.senhaWiFi = strdup(req->getMember("senhaWiFi"));
+            ConfigsAtuais.ssidWiFi = strdup(req->getMember("ssidWiFi"));
+            ConfigsAtuais.ativa = req->getMember("ativa");
+            ConfigsAtuais.ultimaAtt = time(0);
+            ConfigsAtuais.Salvar();
+            SerialBT.print("OK");
         }
     };
 }
