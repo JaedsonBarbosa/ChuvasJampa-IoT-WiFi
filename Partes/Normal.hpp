@@ -23,7 +23,7 @@ namespace Normal
         }
 
         int MakeRequest(HTTPClient * http, String function, std::string content) {
-            http->begin("http://192.168.0.103:5001/chuvasjampa/us-central1/" + function);
+            http->begin("http://192.168.0.106:5001/chuvasjampa/us-central1/" + function);
             http->setConnectTimeout(120000);
             http->setTimeout(120000);
             http->addHeader("Content-Type", "application/json");

@@ -51,7 +51,6 @@ namespace Configuracao {
             res["idEstacao"] = ConfigsAtuais->idEstacao;
             res["isConectado"] = WiFi.status() == WL_CONNECTED;
             res["ativa"] = ConfigsAtuais->ativa;
-            res["nomeEstacao"] = ConfigsAtuais->nomeEstacao;
             res["ssidWiFi"] = ConfigsAtuais->ssidWiFi;
             res["ultimaAtt"] = ConfigsAtuais->ultimaAtt;
             res["senhaWiFi"] = ConfigsAtuais->senhaWiFi;
@@ -64,7 +63,6 @@ namespace Configuracao {
 
         void SalvarConfigs(DynamicJsonDocument* req) {
             ConfigsAtuais->idEstacao = strdup(req->getMember("idEstacao"));
-            ConfigsAtuais->nomeEstacao = strdup(req->getMember("nomeEstacao"));
             ConfigsAtuais->senhaWiFi = strdup(req->getMember("senhaWiFi"));
             ConfigsAtuais->ssidWiFi = strdup(req->getMember("ssidWiFi"));
             ConfigsAtuais->ativa = req->getMember("ativa");
