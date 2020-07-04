@@ -1,4 +1,4 @@
-#include "SuperEstado.hpp"
+#include "Memoria.hpp"
 #include <BluetoothSerial.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -8,67 +8,56 @@
 #endif
 
 namespace Configuracao {
-    class Gerenciador : SuperEstado {
-        Dados* ConfigsAtuais;
-        BluetoothSerial SerialBT;
-        DynamicJsonDocument * Requisicao;
-        DynamicJsonDocument * RetornoInfos;
+    BluetoothSerial SerialBT;
+    DynamicJsonDocument * Requisicao;
+    DynamicJsonDocument * RetornoInfos;
 
-        public:
-        Gerenciador(Dados* dados) {
-            ConfigsAtuais = dados;
-            Requisicao = new DynamicJsonDocument(1024);
-            RetornoInfos = new DynamicJsonDocument(1024);
-        }
+    void GetDados() {
+        auto res = *RetornoInfos;
+        res["idEstacao"] = Memoria::idEstacao;
+        res["isConectado"] = WiFi.status() == WL_CONNECTED;
+        res["ssidWiFi"] = Memoria::ssidWiFi;
+        res["senhaWiFi"] = Memoria::senhaWiFi;
+        res["latRegistrada"] = Memoria::latRegistrada;
+        res["lonRegistrada"] = Memoria::lonRegistrada;
+        JsonArray redesDisponiveis = res.createNestedArray("redesDisponiveis");
+        int quant = WiFi.scanNetworks();
+        for (int i = 0; i < quant; i++)
+            redesDisponiveis.add(WiFi.SSID(i));
+        serializeJson(res, SerialBT);
+    }
 
-        void Iniciar() {
-            SerialBT.begin("Estação");
-            Serial.println("Bluetooth habilidato.");
-        }
+    void SetDados(DynamicJsonDocument* req) {
+        Memoria::idEstacao = strdup(req->getMember("idEstacao"));
+        Memoria::senhaWiFi = strdup(req->getMember("senhaWiFi"));
+        Memoria::ssidWiFi = strdup(req->getMember("ssidWiFi"));
+        Memoria::latRegistrada = req->getMember("latRegistrada");
+        Memoria::lonRegistrada = req->getMember("lonRegistrada");
+        Memoria::Salvar();
+        SerialBT.print("OK");
+    }
 
-        void Encerrar() {
-            SerialBT.disconnect();
-            SerialBT.end();
-            Serial.println("Bluetooth desabilitado.");
-        }
-    
-        void Executar() {
-            if (SerialBT.available()) {
-                auto req = *Requisicao;
-                deserializeJson(req, SerialBT);
-                const char* metodo = req["metodo"];
-                if (!strcmp(metodo, "GetInfos")) {
-                    GetInfos();
-                } else if (!strcmp(metodo, "SalvarConfigs")) {
-                    SalvarConfigs(&req);
-                }
+    void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
+    {
+        if (event == ESP_SPP_DATA_IND_EVT) {
+            auto req = *Requisicao;
+            deserializeJson(req, SerialBT);
+            const char* metodo = req["metodo"];
+            if (!strcmp(metodo, "GetDados")) {
+                GetDados();
+            } else if (!strcmp(metodo, "SetDados")) {
+                SetDados(&req);
             }
         }
+    }
 
-        private:
-        void GetInfos() {
-            auto res = *RetornoInfos;
-            res["idEstacao"] = ConfigsAtuais->idEstacao;
-            res["isConectado"] = WiFi.status() == WL_CONNECTED;
-            res["ativa"] = ConfigsAtuais->ativa;
-            res["ssidWiFi"] = ConfigsAtuais->ssidWiFi;
-            res["ultimaAtt"] = ConfigsAtuais->ultimaAtt;
-            res["senhaWiFi"] = ConfigsAtuais->senhaWiFi;
-            JsonArray redesDisponiveis = res.createNestedArray("redesDisponiveis");
-            int quant = WiFi.scanNetworks();
-            for (int i = 0; i < quant; i++)
-                redesDisponiveis.add(WiFi.SSID(i));
-            serializeJson(res, SerialBT);
+    void Iniciar(int ledBluetooth) {
+        Requisicao = new DynamicJsonDocument(1024);
+        RetornoInfos = new DynamicJsonDocument(1024);
+        SerialBT.register_callback(callback);
+        pinMode(ledBluetooth, OUTPUT);
+        if (SerialBT.begin("Estação")) {
+            digitalWrite(ledBluetooth, HIGH);
         }
-
-        void SalvarConfigs(DynamicJsonDocument* req) {
-            ConfigsAtuais->idEstacao = strdup(req->getMember("idEstacao"));
-            ConfigsAtuais->senhaWiFi = strdup(req->getMember("senhaWiFi"));
-            ConfigsAtuais->ssidWiFi = strdup(req->getMember("ssidWiFi"));
-            ConfigsAtuais->ativa = req->getMember("ativa");
-            ConfigsAtuais->ultimaAtt = time(0);
-            ConfigsAtuais->Salvar();
-            SerialBT.print("OK");
-        }
-    };
+    }
 }
