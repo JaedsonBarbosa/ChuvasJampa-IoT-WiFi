@@ -1,4 +1,6 @@
+#pragma once
 #include "Memoria.hpp"
+#include "Rede.hpp"
 #include <BluetoothSerial.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -28,12 +30,16 @@ namespace Configuracao {
     }
 
     void SetDados(DynamicJsonDocument* req) {
+        auto novaSenhaWifi = strdup(req->getMember("senhaWiFi"));
+        auto novoSSIDWiFI = strdup(req->getMember("ssidWiFi"));
+        auto attWifi = !strcmp(Memoria::senhaWiFi, novaSenhaWifi) || !strcmp(Memoria::ssidWiFi, novoSSIDWiFI);
         Memoria::idEstacao = strdup(req->getMember("idEstacao"));
-        Memoria::senhaWiFi = strdup(req->getMember("senhaWiFi"));
-        Memoria::ssidWiFi = strdup(req->getMember("ssidWiFi"));
+        Memoria::senhaWiFi = novaSenhaWifi;
+        Memoria::ssidWiFi = novoSSIDWiFI;
         Memoria::latRegistrada = req->getMember("latRegistrada");
         Memoria::lonRegistrada = req->getMember("lonRegistrada");
         Memoria::Salvar();
+        if (attWifi) Rede::ConectarRedeCadastrada();
         SerialBT.print("OK");
     }
 

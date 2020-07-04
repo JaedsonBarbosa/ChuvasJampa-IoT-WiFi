@@ -5,6 +5,7 @@
 
 namespace Registros
 {
+    int ledNuvem;
     Preferences preferences;
     const char * nomeTabela = "registros";
     const char * campoRegistros = "valores";
@@ -12,7 +13,7 @@ namespace Registros
     time_t * registros;
     int quantidade;
 
-    void Iniciar() {
+    void Iniciar(int _ledNuvem) {
         preferences.begin(nomeTabela, true);
         auto schLen = preferences.getBytesLength(campoRegistros);
         if (schLen > 0 && schLen % sizeof(time_t) == 0) {
@@ -27,6 +28,10 @@ namespace Registros
             quantidade = 0;
         }
         preferences.end();
+        
+        ledNuvem = _ledNuvem;
+        pinMode(ledNuvem, OUTPUT);
+        digitalWrite(ledNuvem, !quantidade);
     }
 
     void Adicionar(time_t datahora) {
@@ -35,6 +40,7 @@ namespace Registros
         preferences.putBytes(campoRegistros, registros, quantidade * sizeof(time_t));
         preferences.putInt(campoQuantidade, quantidade);
         preferences.end();
+        digitalWrite(ledNuvem, false);
     }
 
     void Limpar() {
@@ -42,6 +48,7 @@ namespace Registros
         quantidade = 0;
         preferences.putInt(campoQuantidade, quantidade);
         preferences.end();
+        digitalWrite(ledNuvem, true);
     }
 
     int MakeRequest(HTTPClient * http, String function, std::string content) {
@@ -52,17 +59,17 @@ namespace Registros
         return http->POST(content.c_str());
     }
     
-    bool registroOcupado = false;
+    static bool registroOcupado = false;
     void Registrar(time_t datahora) {
         while (registroOcupado) delay(100); //Aguarda o fim da execução anterior
         registroOcupado = true;
         DynamicJsonDocument envio(256);
         envio["idEstacao"] = Memoria::idEstacao;
-        if (quantidade != 0 || datahora == 0) {
+        if (quantidade != 0 || datahora == NULL) {
             JsonArray datashoras = envio.createNestedArray("datashoras");
             for (int i = 0; i < quantidade; i++)
                 datashoras.add(registros[i]);
-            if (datahora != 0) datashoras.add(datahora);
+            if (datahora != NULL) datashoras.add(datahora);
         } else envio["datahora"] = datahora;
         try
         {

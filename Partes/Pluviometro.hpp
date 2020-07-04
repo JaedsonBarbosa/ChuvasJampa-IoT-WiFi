@@ -1,8 +1,11 @@
+#pragma once
 #include "Memoria.hpp"
 #include "Registros.hpp"
 
 namespace Pluviometro
 {
+    int pinoPluv;
+    bool isHabilitado = false;
     unsigned long ultimoClick = 0;
 
     void registrar(void *arg) {
@@ -18,8 +21,14 @@ namespace Pluviometro
         }
     }
 
-    void Iniciar(int pinoPluv) {
+    void Iniciar(int _pinoPluv) {
+        pinoPluv = _pinoPluv;
         pinMode(pinoPluv, INPUT_PULLDOWN);
-	    attachInterrupt(pinoPluv, pulsoDetectado, RISING);
+    }
+
+    void Habilitar() {
+        if (isHabilitado) return;
+        attachInterrupt(pinoPluv, pulsoDetectado, RISING);
+        isHabilitado = true;
     }
 }

@@ -1,3 +1,4 @@
+#pragma once
 #include "Memoria.hpp"
 #include "Relogio.hpp"
 #include "Registros.hpp"
@@ -10,8 +11,8 @@ namespace Rede
     void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info)
     {
         digitalWrite(ledWiFi, HIGH);
-        if (!Relogio::configuradoNTP) Relogio::ConfigurarNTP();
-        if (Relogio::configuradoNTP && Registros::quantidade > 0) {
+        if (!Relogio::configuradoViaNTP) Relogio::ConfigurarViaNTP();
+        if ((Relogio::configuradoViaNTP || Relogio::configuradoViaGPS) && Registros::quantidade > 0) {
             Registros::Registrar(NULL);
         }
     }
@@ -22,6 +23,7 @@ namespace Rede
     }
 
     void ConectarRedeCadastrada() {
+        digitalWrite(ledWiFi, LOW);
         if (strlen(Memoria::senhaWiFi) >= 8) {
             WiFi.begin(Memoria::ssidWiFi, Memoria::senhaWiFi);
         }

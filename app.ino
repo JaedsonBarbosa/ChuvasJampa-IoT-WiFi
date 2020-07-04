@@ -7,11 +7,11 @@ void setup()
 {
     Serial.begin(115200);
     Memoria::Iniciar();
-    GPS::Iniciar(14,27);
-    Registros::Iniciar();
+    Registros::Iniciar(26);
     Configuracao::Iniciar(13);
     Pluviometro::Iniciar(23);
     Rede::Iniciar(12);
+    GPS::Iniciar(14,27);
 }
 
 void loop() { vTaskDelete(NULL); }
