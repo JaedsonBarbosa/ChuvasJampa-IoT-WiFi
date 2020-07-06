@@ -7,6 +7,7 @@
 namespace Rede
 {
     int ledWiFi;
+    bool conectado = false;
 
     void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info)
     {
@@ -15,11 +16,13 @@ namespace Rede
         if ((Relogio::configuradoViaNTP || Relogio::configuradoViaGPS) && Registros::quantidade > 0) {
             Registros::Registrar(NULL);
         }
+        conectado = true;
     }
 
     void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
     {
         digitalWrite(ledWiFi, LOW);
+        conectado = false;
     }
 
     void ConectarRedeCadastrada() {

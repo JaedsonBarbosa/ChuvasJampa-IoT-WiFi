@@ -3,13 +3,18 @@
 
 namespace Relogio
 {
-    int ledRelogio;
+    int ledRelogioGPS;
+    int ledRelogioNTP;
     bool configuradoViaGPS = false;
     bool configuradoViaNTP = false;
 
-    void Iniciar(int _ledRelogio) {
-        ledRelogio = _ledRelogio;
-        pinMode(ledRelogio, OUTPUT);
+    void Iniciar(int _ledRelogioGPS, int _ledRelogioNTP) {
+        ledRelogioGPS = _ledRelogioGPS;
+        ledRelogioNTP = _ledRelogioNTP;
+        pinMode(ledRelogioGPS, OUTPUT);
+        pinMode(ledRelogioNTP, OUTPUT);
+        digitalWrite(ledRelogioGPS, LOW);
+        digitalWrite(ledRelogioNTP, LOW);
     }
 
     void ConfigurarViaNTP() {
@@ -22,6 +27,8 @@ namespace Relogio
             configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
             configuradoViaNTP = true;
             Pluviometro::Habilitar();
+            digitalWrite(ledRelogioGPS, LOW);
+            digitalWrite(ledRelogioNTP, HIGH);
         }
         catch(const std::exception& e) {}
     }
@@ -35,5 +42,6 @@ namespace Relogio
         settimeofday(tv, tz);
         configuradoViaGPS = true;
         Pluviometro::Habilitar();
+        digitalWrite(ledRelogioGPS, HIGH);
     }
 }

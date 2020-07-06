@@ -13,6 +13,7 @@ namespace Configuracao {
     BluetoothSerial SerialBT;
     DynamicJsonDocument * Requisicao;
     DynamicJsonDocument * RetornoInfos;
+    bool isRequisicaoRecebida = false;
 
     void GetDados() {
         auto res = *RetornoInfos;
@@ -43,17 +44,21 @@ namespace Configuracao {
         SerialBT.print("OK");
     }
 
+    void ProcessarRequisicao() {
+        auto req = *Requisicao;
+        deserializeJson(req, SerialBT);
+        const char* metodo = req["metodo"];
+        if (!strcmp(metodo, "GetDados")) {
+            GetDados();
+        } else if (!strcmp(metodo, "SetDados")) {
+            SetDados(&req);
+        }
+    }
+
     void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
     {
         if (event == ESP_SPP_DATA_IND_EVT) {
-            auto req = *Requisicao;
-            deserializeJson(req, SerialBT);
-            const char* metodo = req["metodo"];
-            if (!strcmp(metodo, "GetDados")) {
-                GetDados();
-            } else if (!strcmp(metodo, "SetDados")) {
-                SetDados(&req);
-            }
+            isRequisicaoRecebida = true;
         }
     }
 

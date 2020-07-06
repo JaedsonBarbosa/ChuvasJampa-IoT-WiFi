@@ -1,4 +1,5 @@
 #pragma once
+#include "Memoria.hpp"
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -73,13 +74,17 @@ namespace Registros
         } else envio["datahora"] = datahora;
         try
         {
-            char envioC[256];
-            serializeJson(envio, envioC, 256);
-            HTTPClient http;
-            int httpCode = MakeRequest(&http, "AdicionarRegistro", envioC);
-            if (httpCode == 201) Limpar();
-            else Adicionar(datahora);
-            http.end();
+            if (strlen(Memoria::idEstacao) == 0) {
+                Adicionar(datahora);
+            } else {
+                char envioC[256];
+                serializeJson(envio, envioC, 256);
+                HTTPClient http;
+                int httpCode = MakeRequest(&http, "AdicionarRegistro", envioC);
+                if (httpCode == 201) Limpar();
+                else Adicionar(datahora);
+                http.end();
+            }
         }
         catch(const std::exception& e) { Adicionar(datahora); }
         registroOcupado = false;
