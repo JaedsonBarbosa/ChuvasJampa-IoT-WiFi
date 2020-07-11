@@ -14,6 +14,7 @@ namespace Configuracao {
     DynamicJsonDocument * Requisicao;
     DynamicJsonDocument * RetornoInfos;
     bool isRequisicaoRecebida = false;
+    String requisicao;
 
     void GetDados() {
         auto res = *RetornoInfos;
@@ -27,7 +28,9 @@ namespace Configuracao {
         int quant = WiFi.scanNetworks();
         for (int i = 0; i < quant; i++)
             redesDisponiveis.add(WiFi.SSID(i));
-        serializeJson(res, SerialBT);
+        char envioC[512];
+        serializeJson(res, envioC);
+        SerialBT.println(envioC);
     }
 
     void SetDados(DynamicJsonDocument* req) {
@@ -41,12 +44,12 @@ namespace Configuracao {
         Memoria::lonRegistrada = req->getMember("lonRegistrada");
         Memoria::Salvar();
         if (attWifi) Rede::ConectarRedeCadastrada();
-        SerialBT.print("OK");
+        SerialBT.println("OK");
     }
 
     void ProcessarRequisicao() {
         auto req = *Requisicao;
-        deserializeJson(req, SerialBT);
+        deserializeJson(req, requisicao);
         const char* metodo = req["metodo"];
         if (!strcmp(metodo, "GetDados")) {
             GetDados();
@@ -58,13 +61,14 @@ namespace Configuracao {
     void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
     {
         if (event == ESP_SPP_DATA_IND_EVT) {
+            requisicao = SerialBT.readString();
             isRequisicaoRecebida = true;
         }
     }
 
     void Iniciar(int ledBluetooth) {
-        Requisicao = new DynamicJsonDocument(1024);
-        RetornoInfos = new DynamicJsonDocument(1024);
+        Requisicao = new DynamicJsonDocument(512);
+        RetornoInfos = new DynamicJsonDocument(512);
         SerialBT.register_callback(callback);
         pinMode(ledBluetooth, OUTPUT);
         if (SerialBT.begin("Estação")) {
