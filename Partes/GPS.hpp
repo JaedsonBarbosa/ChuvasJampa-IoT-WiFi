@@ -4,7 +4,7 @@
 #include <TinyGPS++.h>
 
 namespace GPS {
-    int ledGPS, ledLocalCorreto;
+    int ledGPS;
     HardwareSerial SerialGPS(2);
     TinyGPSPlus gps;
 
@@ -30,19 +30,12 @@ namespace GPS {
         if (localEncontrado) {
             digitalWrite(ledGPS, HIGH);
             Relogio::ConfigurarViaGPS(GPSTime());
-            int latitude = gps.location.lat() * 1000;
-            int longitude = gps.location.lng() * 1000;
-            digitalWrite(ledLocalCorreto,
-                latitude == Memoria::latRegistrada
-                && longitude == Memoria::lonRegistrada);
         }
     }
 
-    void Iniciar(int _ledGPS, int _ledLocalCorreto) {
+    void Iniciar(int _ledGPS) {
         ledGPS = _ledGPS;
-        ledLocalCorreto = _ledLocalCorreto;
         pinMode(ledGPS, OUTPUT);
-        pinMode(ledLocalCorreto, OUTPUT);
         SerialGPS.begin(9600, SERIAL_8N1, 16, 17);
 	    SerialGPS.setInterrupt(&serialEvent);
     }

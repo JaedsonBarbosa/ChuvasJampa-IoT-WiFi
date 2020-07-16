@@ -11,9 +11,9 @@ void setup()
     Registros::Iniciar(pinosStatus[0]);
     Configuracao::Iniciar(pinosStatus[1]);
     Pluviometro::Iniciar(23);
-    Relogio::Iniciar(pinosStatus[5], pinosStatus[6]);
+    Relogio::Iniciar(pinosStatus[4], pinosStatus[5]);
     Rede::Iniciar(pinosStatus[2]);
-    GPS::Iniciar(pinosStatus[3], pinosStatus[4]);
+    GPS::Iniciar(pinosStatus[3]);
 }
 
 void loop()

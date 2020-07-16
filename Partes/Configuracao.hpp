@@ -1,4 +1,5 @@
 #pragma once
+#include "GPS.hpp"
 #include "Memoria.hpp"
 #include "Rede.hpp"
 #include <BluetoothSerial.h>
@@ -16,21 +17,25 @@ namespace Configuracao {
     bool isRequisicaoRecebida = false;
     String requisicao;
 
+    void sendResponse(const DynamicJsonDocument &response) {
+        char envioC[512];
+        serializeJson(response, envioC);
+        SerialBT.println(envioC);
+        Serial.println(envioC);
+    }
+
     void GetDados() {
         auto res = *RetornoInfos;
+        res["metodo"] = "GetDados";
         res["idEstacao"] = Memoria::idEstacao;
         res["isConectado"] = WiFi.status() == WL_CONNECTED;
         res["ssidWiFi"] = Memoria::ssidWiFi;
         res["senhaWiFi"] = Memoria::senhaWiFi;
-        res["latRegistrada"] = Memoria::latRegistrada;
-        res["lonRegistrada"] = Memoria::lonRegistrada;
         JsonArray redesDisponiveis = res.createNestedArray("redesDisponiveis");
         int quant = WiFi.scanNetworks();
         for (int i = 0; i < quant; i++)
             redesDisponiveis.add(WiFi.SSID(i));
-        char envioC[512];
-        serializeJson(res, envioC);
-        SerialBT.println(envioC);
+        sendResponse(res);
     }
 
     void SetDados(DynamicJsonDocument* req) {
@@ -40,11 +45,28 @@ namespace Configuracao {
         Memoria::idEstacao = strdup(req->getMember("idEstacao"));
         Memoria::senhaWiFi = novaSenhaWifi;
         Memoria::ssidWiFi = novoSSIDWiFI;
-        Memoria::latRegistrada = req->getMember("latRegistrada");
-        Memoria::lonRegistrada = req->getMember("lonRegistrada");
         Memoria::Salvar();
         if (attWifi) Rede::ConectarRedeCadastrada();
-        SerialBT.println("OK");
+        auto res = *RetornoInfos;
+        res["metodo"] = "SetDados";
+        res["success"] = true;
+        sendResponse(res);
+    }
+
+    void GetGPS() {
+        auto local = GPS::gps.location;
+        auto res = *RetornoInfos;
+        res["metodo"] = "GetGPS";
+        res["valid"] = local.isValid();
+        res["lat"] = local.lat();
+        res["lon"] = local.lng();
+        sendResponse(res);
+    }
+
+    void GetStatus() {
+        auto res = *RetornoInfos;
+        
+        sendResponse(res);
     }
 
     void ProcessarRequisicao() {
@@ -55,6 +77,8 @@ namespace Configuracao {
             GetDados();
         } else if (!strcmp(metodo, "SetDados")) {
             SetDados(&req);
+        } else if (!strcmp(metodo, "GetGPS")) {
+            GetGPS();
         }
     }
 
@@ -62,6 +86,7 @@ namespace Configuracao {
     {
         if (event == ESP_SPP_DATA_IND_EVT) {
             requisicao = SerialBT.readString();
+            Serial.println(requisicao);
             isRequisicaoRecebida = true;
         }
     }
