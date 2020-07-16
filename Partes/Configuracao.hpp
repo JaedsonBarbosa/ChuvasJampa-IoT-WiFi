@@ -2,6 +2,7 @@
 #include "GPS.hpp"
 #include "Memoria.hpp"
 #include "Rede.hpp"
+#include "Status.hpp"
 #include <BluetoothSerial.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -91,13 +92,10 @@ namespace Configuracao {
         }
     }
 
-    void Iniciar(int ledBluetooth) {
+    void Iniciar() {
         Requisicao = new DynamicJsonDocument(512);
         RetornoInfos = new DynamicJsonDocument(512);
         SerialBT.register_callback(callback);
-        pinMode(ledBluetooth, OUTPUT);
-        if (SerialBT.begin("Estação")) {
-            digitalWrite(ledBluetooth, HIGH);
-        }
+        Status::bluetoothAtivado = SerialBT.begin("Estacao");
     }
 }

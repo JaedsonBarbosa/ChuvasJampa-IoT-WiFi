@@ -1,12 +1,12 @@
 #pragma once
 #include "Memoria.hpp"
+#include "Status.hpp"
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
 namespace Registros
 {
-    int ledNuvem;
     Preferences preferences;
     const char * nomeTabela = "registros";
     const char * campoRegistros = "valores";
@@ -14,7 +14,7 @@ namespace Registros
     time_t * registros;
     int quantidade;
 
-    void Iniciar(int _ledNuvem) {
+    void Iniciar() {
         preferences.begin(nomeTabela, true);
         auto schLen = preferences.getBytesLength(campoRegistros);
         if (schLen > 0 && schLen % sizeof(time_t) == 0) {
@@ -29,10 +29,7 @@ namespace Registros
             quantidade = 0;
         }
         preferences.end();
-        
-        ledNuvem = _ledNuvem;
-        pinMode(ledNuvem, OUTPUT);
-        digitalWrite(ledNuvem, !quantidade);
+        Status::nuvemConectada = !quantidade;
     }
 
     void Adicionar(time_t datahora) {
@@ -41,7 +38,7 @@ namespace Registros
         preferences.putBytes(campoRegistros, registros, quantidade * sizeof(time_t));
         preferences.putInt(campoQuantidade, quantidade);
         preferences.end();
-        digitalWrite(ledNuvem, false);
+        Status::nuvemConectada = false;
     }
 
     void Limpar() {
@@ -49,7 +46,7 @@ namespace Registros
         quantidade = 0;
         preferences.putInt(campoQuantidade, quantidade);
         preferences.end();
-        digitalWrite(ledNuvem, true);
+        Status::nuvemConectada = true;
     }
 
     int MakeRequest(HTTPClient * http, String function, std::string content) {

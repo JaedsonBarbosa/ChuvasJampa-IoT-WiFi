@@ -2,39 +2,33 @@
 #include "Memoria.hpp"
 #include "Relogio.hpp"
 #include "Registros.hpp"
+#include "Status.hpp"
 #include <WiFi.h>
 
 namespace Rede
 {
-    int ledWiFi;
-    bool conectado = false;
-
     void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info)
     {
-        digitalWrite(ledWiFi, HIGH);
-        if (!Relogio::configuradoViaNTP) Relogio::ConfigurarViaNTP();
-        if ((Relogio::configuradoViaNTP || Relogio::configuradoViaGPS) && Registros::quantidade > 0) {
+        Status::wifiConectado = true;
+        if (!Status::relogioConfiguradoNTP) Relogio::ConfigurarViaNTP();
+        if ((Status::relogioConfiguradoNTP || Status::relogioConfiguradoGPS) && Registros::quantidade > 0) {
             Registros::Registrar(NULL);
         }
-        conectado = true;
     }
 
     void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
     {
-        digitalWrite(ledWiFi, LOW);
-        conectado = false;
+        Status::wifiConectado = false;
     }
 
     void ConectarRedeCadastrada() {
-        digitalWrite(ledWiFi, LOW);
+        Status::wifiConectado = false;
         if (strlen(Memoria::senhaWiFi) >= 8) {
             WiFi.begin(Memoria::ssidWiFi, Memoria::senhaWiFi);
         }
     }
 
-    void Iniciar(int _ledWiFi) {
-        ledWiFi = _ledWiFi;
-        pinMode(ledWiFi, OUTPUT);
+    void Iniciar() {
         WiFi.onEvent(WiFiStationConnected, SYSTEM_EVENT_STA_GOT_IP);
 	    WiFi.onEvent(WiFiStationDisconnected, SYSTEM_EVENT_STA_DISCONNECTED);
         ConectarRedeCadastrada();

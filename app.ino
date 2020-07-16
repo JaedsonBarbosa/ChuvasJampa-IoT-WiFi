@@ -5,15 +5,14 @@
 
 void setup()
 {
-    int pinosStatus[] = {13,12,14,27,26,25,33};
+    //int pinosStatus[] = {13,12,14,27,26,25,33};
     Serial.begin(115200);
     Memoria::Iniciar();
-    Registros::Iniciar(pinosStatus[0]);
-    Configuracao::Iniciar(pinosStatus[1]);
+    Registros::Iniciar();
+    Configuracao::Iniciar();
     Pluviometro::Iniciar(23);
-    Relogio::Iniciar(pinosStatus[4], pinosStatus[5]);
-    Rede::Iniciar(pinosStatus[2]);
-    GPS::Iniciar(pinosStatus[3]);
+    Rede::Iniciar();
+    GPS::Iniciar();
 }
 
 void loop()
