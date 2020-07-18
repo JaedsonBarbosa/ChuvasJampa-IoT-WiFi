@@ -18,7 +18,8 @@ void setup()
 void loop()
 {
     if (Configuracao::isRequisicaoRecebida) {
-        Configuracao::ProcessarRequisicao();
+        auto result = Configuracao::ProcessarRequisicao();
+        Serial.println(result);
         Configuracao::isRequisicaoRecebida = false;
     }
 }

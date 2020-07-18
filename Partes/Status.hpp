@@ -1,3 +1,5 @@
+#pragma once
+
 namespace Status
 {
     bool nuvemConectada = false;

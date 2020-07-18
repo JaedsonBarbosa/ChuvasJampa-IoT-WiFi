@@ -18,69 +18,50 @@ namespace Configuracao {
     bool isRequisicaoRecebida = false;
     String requisicao;
 
-    void sendResponse(const DynamicJsonDocument &response) {
-        char envioC[512];
-        serializeJson(response, envioC);
-        SerialBT.println(envioC);
-        Serial.println(envioC);
-    }
-
-    void GetDados() {
-        auto res = *RetornoInfos;
-        res["metodo"] = "GetDados";
-        res["idEstacao"] = Memoria::idEstacao;
-        res["isConectado"] = WiFi.status() == WL_CONNECTED;
-        res["ssidWiFi"] = Memoria::ssidWiFi;
-        res["senhaWiFi"] = Memoria::senhaWiFi;
-        JsonArray redesDisponiveis = res.createNestedArray("redesDisponiveis");
-        int quant = WiFi.scanNetworks();
-        for (int i = 0; i < quant; i++)
-            redesDisponiveis.add(WiFi.SSID(i));
-        sendResponse(res);
-    }
-
-    void SetDados(DynamicJsonDocument* req) {
-        auto novaSenhaWifi = strdup(req->getMember("senhaWiFi"));
-        auto novoSSIDWiFI = strdup(req->getMember("ssidWiFi"));
-        auto attWifi = !strcmp(Memoria::senhaWiFi, novaSenhaWifi) || !strcmp(Memoria::ssidWiFi, novoSSIDWiFI);
-        Memoria::idEstacao = strdup(req->getMember("idEstacao"));
-        Memoria::senhaWiFi = novaSenhaWifi;
-        Memoria::ssidWiFi = novoSSIDWiFI;
-        Memoria::Salvar();
-        if (attWifi) Rede::ConectarRedeCadastrada();
-        auto res = *RetornoInfos;
-        res["metodo"] = "SetDados";
-        res["success"] = true;
-        sendResponse(res);
-    }
-
-    void GetGPS() {
-        auto local = GPS::gps.location;
-        auto res = *RetornoInfos;
-        res["metodo"] = "GetGPS";
-        res["valid"] = local.isValid();
-        res["lat"] = local.lat();
-        res["lon"] = local.lng();
-        sendResponse(res);
-    }
-
-    void GetStatus() {
-        auto res = *RetornoInfos;
-        
-        sendResponse(res);
-    }
-
-    void ProcessarRequisicao() {
+    int ProcessarRequisicao() {
         auto req = *Requisicao;
         deserializeJson(req, requisicao);
+        auto res = *RetornoInfos;
         const char* metodo = req["metodo"];
         if (!strcmp(metodo, "GetDados")) {
-            GetDados();
+            res["idEstacao"] = Memoria::idEstacao;
+            res["isConectado"] = WiFi.status() == WL_CONNECTED;
+            res["ssidWiFi"] = Memoria::ssidWiFi;
+            res["senhaWiFi"] = Memoria::senhaWiFi;
+            JsonArray redesDisponiveis = res.createNestedArray("redesDisponiveis");
+            int quant = WiFi.scanNetworks();
+            for (int i = 0; i < quant; i++)
+                redesDisponiveis.add(WiFi.SSID(i));
         } else if (!strcmp(metodo, "SetDados")) {
-            SetDados(&req);
+            auto novaSenhaWifi = strdup(req["senhaWiFi"]);
+            auto novoSSIDWiFI = strdup(req["ssidWiFi"]);
+            auto attWifi = !strcmp(Memoria::senhaWiFi, novaSenhaWifi) || !strcmp(Memoria::ssidWiFi, novoSSIDWiFI);
+            Memoria::idEstacao = strdup(req["idEstacao"]);
+            Memoria::senhaWiFi = novaSenhaWifi;
+            Memoria::ssidWiFi = novoSSIDWiFI;
+            Memoria::Salvar();
+            if (attWifi) Rede::ConectarRedeCadastrada();
+            res["metodo"] = "SetDados";
+            res["success"] = true;
         } else if (!strcmp(metodo, "GetGPS")) {
-            GetGPS();
-        }
+            auto local = GPS::gps.location;
+            res["metodo"] = "GetGPS";
+            res["valid"] = local.isValid();
+            res["lat"] = local.lat();
+            res["lon"] = local.lng();
+        } else if (!strcmp(metodo, "GetStatus")) {
+            res["metodo"] = "GetStatus";
+            res["nuvemConectada"] = Status::nuvemConectada;
+            res["bluetoothAtivado"] = Status::bluetoothAtivado;
+            res["relogioConfiguradoGPS"] = Status::relogioConfiguradoGPS;
+            res["relogioConfiguradoNTP"] = Status::relogioConfiguradoNTP;
+            res["wifiConectado"] = Status::wifiConectado;
+            res["gpsConectado"] = Status::gpsConectado;
+        } else return 1;
+        char envioC[512];
+        serializeJson(res, envioC);
+        SerialBT.println(envioC);
+        return 0;
     }
 
     void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
