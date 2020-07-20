@@ -1,15 +1,17 @@
 #pragma once
+// Definimos se temos um módulo GPS conectado à estação
+#define POSSUI_GPS false
+#if POSSUI_GPS
 #include "Memoria.hpp"
 #include "Relogio.hpp"
 #include <TinyGPS++.h>
-#define POSSUI_GPS false
 
+// Aqui cuidamos da comunicação com o módulo GPS
 namespace GPS {
-    #if POSSUI_GPS
-
     HardwareSerial SerialGPS(2);
     TinyGPSPlus gps;
 
+    // Processamos o recebimento de dados do GPS
     void serialEvent() {
         bool localEncontrado = false;
         while (SerialGPS.available())
@@ -31,10 +33,10 @@ namespace GPS {
         }
     }
 
+    // Liberamos o recebimento de dados do GPS
     void Iniciar() {
         SerialGPS.begin(9600, SERIAL_8N1, 16, 17);
 	    SerialGPS.setInterrupt(&serialEvent);
     }
-
-    #endif
 }
+#endif

@@ -11,6 +11,7 @@
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
 #endif
 
+// Aqui gerenciamos as configurações da estação
 namespace Configuracao {
     BluetoothSerial SerialBT;
     DynamicJsonDocument * Requisicao;
@@ -18,6 +19,7 @@ namespace Configuracao {
     bool isRequisicaoRecebida = false;
     String requisicao;
 
+    // Processamos as requisições
     int ProcessarRequisicao() {
         auto req = *Requisicao;
         deserializeJson(req, requisicao);
@@ -71,6 +73,7 @@ namespace Configuracao {
         return 0;
     }
 
+    // Se o evento é de recebimento de dados precisamos mandar uma resposta
     void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
     {
         if (event == ESP_SPP_DATA_IND_EVT) {
@@ -79,6 +82,7 @@ namespace Configuracao {
         }
     }
 
+    // Liberamos o recebimento de conexões Bluetooth
     void Iniciar() {
         Requisicao = new DynamicJsonDocument(512);
         RetornoInfos = new DynamicJsonDocument(512);

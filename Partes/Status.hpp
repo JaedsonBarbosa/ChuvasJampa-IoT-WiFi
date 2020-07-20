@@ -1,5 +1,6 @@
 #pragma once
 
+// Gerenciamos os status de cada sistema em execução
 namespace Status
 {
     bool nuvemConectada = false;

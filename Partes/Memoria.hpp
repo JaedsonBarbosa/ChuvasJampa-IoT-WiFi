@@ -1,6 +1,7 @@
 #pragma once
 #include <Preferences.h>
 
+// Gerenciamos o armazenamento das configurações da estação
 namespace Memoria {
     Preferences preferences;
     const char * nomeTabela = "configs";
@@ -9,6 +10,7 @@ namespace Memoria {
     char * ssidWiFi;
     char * senhaWiFi;
 
+    // Pegamos as variáveis da memória não-volátil e as salvamos na memória volátil
     void Iniciar() {
         preferences.begin(nomeTabela, true);
         //Comprimentos máximos determinados pelo IEEE
@@ -21,6 +23,7 @@ namespace Memoria {
         preferences.end();
     }
 
+    // Pegamos as variáveis da memória volátil e as salvamos na memória não-volátil
     void Salvar() {
         preferences.begin(nomeTabela, false);
         preferences.putString("idEstacao", idEstacao);

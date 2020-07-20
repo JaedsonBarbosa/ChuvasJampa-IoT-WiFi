@@ -2,8 +2,11 @@
 #include "Partes/Pluviometro.hpp"
 #include "Partes/Rede.hpp"
 #include "Partes/GPS.hpp"
+
+// Definimos aqui qual o pino que será conectado ao pluviômetro
 #define PINO_PLUVIOMETRO 23
 
+// Aqui é onde tudo começa, sendo apenas executado uma vez logo ao ligar
 void setup()
 {
     Memoria::Iniciar();
@@ -16,6 +19,7 @@ void setup()
     #endif
 }
 
+// O loop serve para analisar se alguma requisição foi recebida pelo Bluetooth
 void loop()
 {
     if (Configuracao::isRequisicaoRecebida) {

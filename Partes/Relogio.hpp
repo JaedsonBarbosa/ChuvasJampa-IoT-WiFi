@@ -2,6 +2,7 @@
 #include "Pluviometro.hpp"
 #include "Status.hpp"
 
+// Gerenciamos o relógio da placa, assim sabemos que momento ocorreu os pulsos
 namespace Relogio
 {
     void ConfigurarViaNTP() {

@@ -5,6 +5,7 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
+// Gerenciamos os registros dos pulsos
 namespace Registros
 {
     Preferences preferences;
@@ -14,6 +15,7 @@ namespace Registros
     time_t * registros;
     int quantidade;
 
+    // Analisamos a memória pra ver o quem salvo lá
     void Iniciar() {
         preferences.begin(nomeTabela, true);
         auto schLen = preferences.getBytesLength(campoRegistros);
@@ -31,6 +33,7 @@ namespace Registros
         Status::nuvemConectada = !quantidade;
     }
 
+    // Adicionamos um registro à memória não-volátil
     void Adicionar(time_t datahora) {
         preferences.begin(nomeTabela);
         registros[quantidade++] = datahora;
@@ -40,6 +43,7 @@ namespace Registros
         Status::nuvemConectada = false;
     }
 
+    // Limpamos a memória não-volátil
     void Limpar() {
         preferences.begin(nomeTabela);
         quantidade = 0;
@@ -48,6 +52,7 @@ namespace Registros
         Status::nuvemConectada = true;
     }
 
+    // Criamos a requisição que irá enviar os registros
     int MakeRequest(HTTPClient * http, String function, std::string content) {
         http->begin("http://192.168.0.109:5001/chuvasjampa/us-central1/" + function);
         http->setConnectTimeout(120000);
@@ -56,6 +61,7 @@ namespace Registros
         return http->POST(content.c_str());
     }
     
+    // Registramos tudo na nuvem
     static bool registroOcupado = false;
     void Registrar(time_t datahora) {
         while (registroOcupado) delay(100); //Aguarda o fim da execução anterior
