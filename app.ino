@@ -2,17 +2,18 @@
 #include "Partes/Pluviometro.hpp"
 #include "Partes/Rede.hpp"
 #include "Partes/GPS.hpp"
+#define PINO_PLUVIOMETRO 23
 
 void setup()
 {
-    //int pinosStatus[] = {13,12,14,27,26,25,33};
-    Serial.begin(115200);
     Memoria::Iniciar();
     Registros::Iniciar();
     Configuracao::Iniciar();
-    Pluviometro::Iniciar(23);
+    Pluviometro::Iniciar(PINO_PLUVIOMETRO);
     Rede::Iniciar();
+    #if POSSUI_GPS
     GPS::Iniciar();
+    #endif
 }
 
 void loop()

@@ -23,7 +23,6 @@ namespace Registros
             registros = (time_t *) buffer;
             quantidade = preferences.getInt(campoQuantidade);
         } else {
-            Serial.println("Sem registros.");
             char * buffer = new char[128 * sizeof(time_t)];
             registros = (time_t *) buffer;
             quantidade = 0;

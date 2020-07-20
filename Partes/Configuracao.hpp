@@ -28,6 +28,7 @@ namespace Configuracao {
             res["isConectado"] = WiFi.status() == WL_CONNECTED;
             res["ssidWiFi"] = Memoria::ssidWiFi;
             res["senhaWiFi"] = Memoria::senhaWiFi;
+            res["possuiGPS"] = POSSUI_GPS;
             JsonArray redesDisponiveis = res.createNestedArray("redesDisponiveis");
             int quant = WiFi.scanNetworks();
             for (int i = 0; i < quant; i++)
@@ -43,7 +44,9 @@ namespace Configuracao {
             if (attWifi) Rede::ConectarRedeCadastrada();
             res["metodo"] = "SetDados";
             res["success"] = true;
-        } else if (!strcmp(metodo, "GetGPS")) {
+        }
+        #if POSSUI_GPS
+        else if (!strcmp(metodo, "GetGPS")) {
             auto local = GPS::gps.location;
             auto lat = local.lat();
             auto lng = local.lng();;
@@ -51,7 +54,9 @@ namespace Configuracao {
             res["valid"] = local.isValid() && lat != 0 && lng != 0;
             res["lat"] = lat;
             res["lon"] = lng;
-        } else if (!strcmp(metodo, "GetStatus")) {
+        }
+        #endif
+        else if (!strcmp(metodo, "GetStatus")) {
             res["metodo"] = "GetStatus";
             res["nuvemConectada"] = Status::nuvemConectada;
             res["bluetoothAtivado"] = Status::bluetoothAtivado;
@@ -70,7 +75,6 @@ namespace Configuracao {
     {
         if (event == ESP_SPP_DATA_IND_EVT) {
             requisicao = SerialBT.readString();
-            Serial.println(requisicao);
             isRequisicaoRecebida = true;
         }
     }
