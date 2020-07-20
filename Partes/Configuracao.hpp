@@ -45,10 +45,12 @@ namespace Configuracao {
             res["success"] = true;
         } else if (!strcmp(metodo, "GetGPS")) {
             auto local = GPS::gps.location;
+            auto lat = local.lat();
+            auto lng = local.lng();;
             res["metodo"] = "GetGPS";
-            res["valid"] = local.isValid();
-            res["lat"] = local.lat();
-            res["lon"] = local.lng();
+            res["valid"] = local.isValid() && lat != 0 && lng != 0;
+            res["lat"] = lat;
+            res["lon"] = lng;
         } else if (!strcmp(metodo, "GetStatus")) {
             res["metodo"] = "GetStatus";
             res["nuvemConectada"] = Status::nuvemConectada;
