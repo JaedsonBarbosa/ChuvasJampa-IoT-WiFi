@@ -10,6 +10,13 @@
             ],
             "cStandard": "c18",
             "cppStandard": "c++20"
+        },
+        {
+            "name": "Win32",
+            "includePath": [
+                "C:\\Users\\jaeds\\Documents\\Arduino\\libraries\\ArduinoBearSSL\\src"
+            ],
+            "forcedInclude": []
         }
     ],
     "version": 4
