@@ -205,5 +205,5 @@ void loop2() {
     if (digitalRead(PINO_PLUVIOMETRO)) {
         registros.push_back(time(0));
         delay(500);
-    }
+    } else delay(10);
 }
