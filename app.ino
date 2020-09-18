@@ -4,15 +4,19 @@
 #include <Preferences.h>
 #include <TinyGPS++.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 
 // Definimos aqui qual o pino que será conectado ao pluviômetro
 #define PINO_PLUVIOMETRO 23
-#define POSSUI_GPS true
+#define POSSUI_GPS false
 #define SECS_ENTRE_VARREDURAS 60
+uint8_t newMACAddress[] = {0x32, 0xAE, 0xA4, 0x07, 0x0D, 0x66};
 
 DynamicJsonDocument Json(1024);
+#if POSSUI_GPS
 HardwareSerial SerialGPS(2);
 TinyGPSPlus gps;
+#endif
 Preferences preferences;
 BluetoothSerial SerialBT;
 std::vector<time_t> registros;
@@ -23,7 +27,11 @@ bool bluetoothAtivado = false;
 bool relogioConfiguradoGPS = false;
 bool relogioConfiguradoNTP = false;
 bool wifiConectado = false;
+#if POSSUI_GPS
 bool gpsConectado = false;
+#else
+const bool gpsConectado = false;
+#endif
 
 char * idEstacao = new char[24];
 char * ssidWiFi = new char[32];
@@ -140,9 +148,13 @@ void setup()
     pinMode(PINO_PLUVIOMETRO, INPUT_PULLDOWN);
     
     bluetoothAtivado = SerialBT.begin("Estacao");
+
+    #if POSSUI_GPS
     SerialGPS.begin(9600, SERIAL_8N1, 16, 17);
+    #endif
     
     WiFi.mode(WIFI_STA);
+    esp_wifi_set_mac(ESP_IF_WIFI_STA, &newMACAddress[0]);
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
         wifiConectado = true;
         if (!relogioConfiguradoNTP) {
@@ -170,6 +182,7 @@ void setup()
 void loop()
 {
     if (SerialBT.available()) ProcessarRequisicaoBluetooth();
+    #if POSSUI_GPS
     if (SerialGPS.available()) {
         bool dadoLido = false;
         while (SerialGPS.available()) if (gps.encode(SerialGPS.read())) dadoLido = true;
@@ -189,6 +202,7 @@ void loop()
             relogioConfiguradoGPS = true;
         }
     }
+    #endif
     if (wifiConectado && strlen(idEstacao) > 0 && registros.size() > 0) {
         auto atual = time(0);
         if (atual - ultimaVarreduraMemoria > SECS_ENTRE_VARREDURAS) {
