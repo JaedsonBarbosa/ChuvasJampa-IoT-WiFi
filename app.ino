@@ -2,36 +2,23 @@
 #include <BluetoothSerial.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
-#include <TinyGPS++.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
 
 // Definimos aqui qual o pino que será conectado ao pluviômetro
-#define PINO_PLUVIOMETRO 23
-#define POSSUI_GPS false
+#define PINO_PLUVIOMETRO 15
 #define SECS_ENTRE_VARREDURAS 60
+#define SECS_ENTRE_ACORDADAS 600
 uint8_t newMACAddress[] = {0x32, 0xAE, 0xA4, 0x07, 0x0D, 0x66};
 
 DynamicJsonDocument Json(1024);
-#if POSSUI_GPS
-HardwareSerial SerialGPS(2);
-TinyGPSPlus gps;
-#endif
 Preferences preferences;
 BluetoothSerial SerialBT;
 std::vector<time_t> registros;
 time_t ultimaVarreduraMemoria = 0;
 
-bool nuvemConectada = true;
 bool bluetoothAtivado = false;
-bool relogioConfiguradoGPS = false;
 bool relogioConfiguradoNTP = false;
-bool wifiConectado = false;
-#if POSSUI_GPS
-bool gpsConectado = false;
-#else
-const bool gpsConectado = false;
-#endif
 
 char * idEstacao = new char[24];
 char * ssidWiFi = new char[32];
@@ -47,7 +34,7 @@ void ProcessarRequisicaoBluetooth() {
         Json["isConectado"] = WiFi.status() == WL_CONNECTED;
         Json["ssidWiFi"] = ssidWiFi;
         Json["senhaWiFi"] = senhaWiFi;
-        Json["possuiGPS"] = POSSUI_GPS;
+        Json["possuiGPS"] = false;
         JsonArray redesDisponiveis = Json.createNestedArray("redesDisponiveis");
         int quant = WiFi.scanNetworks();
         for (int i = 0; i < quant; i++) redesDisponiveis.add(WiFi.SSID(i));
@@ -69,25 +56,14 @@ void ProcessarRequisicaoBluetooth() {
         Json.clear();
         Json["success"] = true;
     }
-    #if POSSUI_GPS
-    else if (!strcmp(metodo, "GetGPS")) {
-        auto local = gps.location;
-        auto lat = local.lat();
-        auto lng = local.lng();
-        Json.clear();
-        Json["valid"] = local.isValid() && lat != 0 && lng != 0;
-        Json["lat"] = lat;
-        Json["lon"] = lng;
-    }
-    #endif
     else if (!strcmp(metodo, "GetStatus")) {
         Json.clear();
-        Json["nuvemConectada"] = nuvemConectada;
+        Json["nuvemConectada"] = true;
         Json["bluetoothAtivado"] = bluetoothAtivado;
-        Json["relogioConfiguradoGPS"] = relogioConfiguradoGPS;
+        Json["relogioConfiguradoGPS"] = false;
         Json["relogioConfiguradoNTP"] = relogioConfiguradoNTP;
-        Json["wifiConectado"] = wifiConectado;
-        Json["gpsConectado"] = gpsConectado;
+        Json["wifiConectado"] = WiFi.status() == WL_CONNECTED;
+        Json["gpsConectado"] = false;
     } else return;
     char envioC[1024];
     serializeJson(Json, envioC);
@@ -111,27 +87,16 @@ void EnviarParaNuvem() {
         https.end();
         if (sucesso) {
             // Operação bem sucedida, então limpamos a memória
-            auto quantRemoverMemoria = registros.size();
-            if (quantRemoverMemoria > 0) {
-                auto inicio = registros.begin();
-                // O intervalo é [inicio, inicio + quantRemoverMemoria[, por isso o + 1
-                registros.erase(inicio, inicio + quantRemoverMemoria + 1);
-            }
-            nuvemConectada = true;
-            return;
+            registros.clear();
         }
     }
     catch(const std::exception& e) { }
-    // Caso a operação não tenho sido bem sucedida salvamos este registro na memória
-    nuvemConectada = false;
 }
 
 // Conectamos à rede cadastrada na memória
 void ConectarRedeCadastrada() {
-    if (strlen(senhaWiFi) >= 8) {
-        wifiConectado = false;
+    if (strlen(senhaWiFi) >= 8)
         WiFi.begin(ssidWiFi, senhaWiFi);
-    }
 }
 
 // Aqui é onde tudo começa, sendo apenas executado uma vez logo ao ligar
@@ -143,75 +108,86 @@ void setup()
     preferences.getString("ssidWiFi", ssidWiFi, 32);
     preferences.getString("senhaWiFi", senhaWiFi, 64);
     preferences.end();
-
-    // Analisamos se temos registros na memória
-    pinMode(PINO_PLUVIOMETRO, INPUT_PULLDOWN);
     
     bluetoothAtivado = SerialBT.begin("Estacao");
-
-    #if POSSUI_GPS
-    SerialGPS.begin(9600, SERIAL_8N1, 16, 17);
-    #endif
     
     WiFi.mode(WIFI_STA);
     esp_wifi_set_mac(ESP_IF_WIFI_STA, &newMACAddress[0]);
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-        wifiConectado = true;
         if (!relogioConfiguradoNTP) {
             try
             {
                 configTime(-3 * 3600, 0, "pool.ntp.org");
-                relogioConfiguradoGPS = false;
                 relogioConfiguradoNTP = true;
             }
             catch(const std::exception& e) {}
         }
     }, SYSTEM_EVENT_STA_GOT_IP);
-    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-        wifiConectado = false;
-    }, SYSTEM_EVENT_STA_DISCONNECTED);
     ConectarRedeCadastrada();
+
+    //pinMode(2, OUTPUT);
+    //digitalWrite(2, HIGH);
+
+    pinMode(PINO_PLUVIOMETRO, INPUT);
 
     xTaskCreatePinnedToCore([](void *arg) {
         while (time(0) < 1595386565) delay(100);
-        for(;;) loop2();
+        for(;;) {
+            if (bluetoothAtivado) loop2();
+            else vTaskDelete(NULL);
+        }
     }, "loop2", 10000, NULL, 1, NULL, 0);
 }
 
+time_t ligadoDesde;
+const auto limiteTempo = 1600548513;
 // O loop serve para analisar se alguma requisição foi recebida pelo Bluetooth
 void loop()
 {
-    if (SerialBT.available()) ProcessarRequisicaoBluetooth();
-    #if POSSUI_GPS
-    if (SerialGPS.available()) {
-        bool dadoLido = false;
-        while (SerialGPS.available()) if (gps.encode(SerialGPS.read())) dadoLido = true;
-        if (!relogioConfiguradoGPS && !relogioConfiguradoNTP && dadoLido && gps.date.year() > 2020) {
-            gpsConectado = true;
-            struct tm t;
-            t.tm_year = gps.date.year()-1900;
-            t.tm_mon = gps.date.month()-1;
-            t.tm_mday = gps.date.day();
-            t.tm_hour = gps.time.hour();
-            t.tm_min =  gps.time.minute();
-            t.tm_sec = gps.time.second();
-            
-            timeval epoch = {mktime(&t), 0};
-            timezone utc = {0,0};
-            settimeofday(&epoch, &utc);
-            relogioConfiguradoGPS = true;
-        }
-    }
-    #endif
-    if (wifiConectado && strlen(idEstacao) > 0 && registros.size() > 0) {
+    if (bluetoothAtivado) {
         auto atual = time(0);
-        if (atual - ultimaVarreduraMemoria > SECS_ENTRE_VARREDURAS) {
+        if (SerialBT.available()) ProcessarRequisicaoBluetooth();
+        if (WiFi.status() == WL_CONNECTED && strlen(idEstacao) > 0 && registros.size() > 0 && atual - ultimaVarreduraMemoria > SECS_ENTRE_VARREDURAS) {
             SerialBT.end();
             bluetoothAtivado = false;
             EnviarParaNuvem();
             bluetoothAtivado = SerialBT.begin("Estacao");
             ultimaVarreduraMemoria = atual;
         }
+        if (ligadoDesde < limiteTempo && atual > limiteTempo) {
+            ligadoDesde = atual - ligadoDesde;
+        }
+        if (atual - ligadoDesde > 30) {
+            SerialBT.end();
+            btStop();
+            bluetoothAtivado = false;
+            //digitalWrite(2, LOW);
+            WiFi.mode(WIFI_OFF);
+            esp_sleep_enable_timer_wakeup(SECS_ENTRE_ACORDADAS * 1000000);
+            esp_sleep_enable_ext1_wakeup(1 << PINO_PLUVIOMETRO, ESP_EXT1_WAKEUP_ANY_HIGH);
+            esp_light_sleep_start();
+        }
+    } else {
+        //digitalWrite(2, HIGH);
+        auto atual = time(0);
+        auto motivo = esp_sleep_get_wakeup_cause();
+        if (motivo == ESP_SLEEP_WAKEUP_EXT1) {
+            registros.push_back(atual);
+        }
+        if (registros.size() > 0 && strlen(idEstacao) > 0 && atual - ultimaVarreduraMemoria > SECS_ENTRE_VARREDURAS) {
+            WiFi.mode(WIFI_STA);
+            ConectarRedeCadastrada();
+            while (WiFi.status() != WL_CONNECTED)
+                if (time(0) - atual > 5) break;
+            if (WiFi.status() != WL_CONNECTED) {
+                EnviarParaNuvem();
+                ultimaVarreduraMemoria = atual;
+            }
+            WiFi.mode(WIFI_OFF);
+        }
+        //delay(1000);
+        //digitalWrite(2, LOW);
+        esp_light_sleep_start();
     }
 }
 
