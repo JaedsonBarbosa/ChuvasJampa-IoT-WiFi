@@ -6,8 +6,9 @@
 #include <esp_wifi.h>
 
 // Definimos aqui qual o pino que será conectado ao pluviômetro
-#define PINO_PLUVIOMETRO 15
+#define PINO_PLUVIOMETRO GPIO_NUM_15
 #define SECS_ENTRE_VARREDURAS 60
+#define SECS_BT_ATIVADO 30
 #define SECS_ENTRE_ACORDADAS 600
 uint8_t newMACAddress[] = {0x32, 0xAE, 0xA4, 0x07, 0x0D, 0x66};
 
@@ -16,9 +17,10 @@ Preferences preferences;
 BluetoothSerial SerialBT;
 std::vector<time_t> registros;
 time_t ultimaVarreduraMemoria = 0;
+time_t ligadoDesde = 0;
+const time_t limiteTempo = 1600548513;
 
 bool bluetoothAtivado = false;
-bool relogioConfiguradoNTP = false;
 
 char * idEstacao = new char[24];
 char * ssidWiFi = new char[32];
@@ -61,7 +63,7 @@ void ProcessarRequisicaoBluetooth() {
         Json["nuvemConectada"] = true;
         Json["bluetoothAtivado"] = bluetoothAtivado;
         Json["relogioConfiguradoGPS"] = false;
-        Json["relogioConfiguradoNTP"] = relogioConfiguradoNTP;
+        Json["relogioConfiguradoNTP"] = time(0) > limiteTempo;
         Json["wifiConectado"] = WiFi.status() == WL_CONNECTED;
         Json["gpsConectado"] = false;
     } else return;
@@ -102,6 +104,8 @@ void ConectarRedeCadastrada() {
 // Aqui é onde tudo começa, sendo apenas executado uma vez logo ao ligar
 void setup()
 {
+    Serial.begin(115200);
+
     // Resgatar configurações salvas na memória
     preferences.begin("configs", true);
     preferences.getString("idEstacao", idEstacao, 24);
@@ -114,12 +118,10 @@ void setup()
     WiFi.mode(WIFI_STA);
     esp_wifi_set_mac(ESP_IF_WIFI_STA, &newMACAddress[0]);
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-        if (!relogioConfiguradoNTP) {
-            try
-            {
-                configTime(-3 * 3600, 0, "pool.ntp.org");
-                relogioConfiguradoNTP = true;
-            }
+        Serial.println("Olha eu aqui");
+        auto atual = time(0);
+        if (!atual < limiteTempo) {
+            try { configTime(-3 * 3600, 0, "pool.ntp.org"); }
             catch(const std::exception& e) {}
         }
     }, SYSTEM_EVENT_STA_GOT_IP);
@@ -128,43 +130,37 @@ void setup()
     //pinMode(2, OUTPUT);
     //digitalWrite(2, HIGH);
 
-    pinMode(PINO_PLUVIOMETRO, INPUT);
-
-    xTaskCreatePinnedToCore([](void *arg) {
-        while (time(0) < 1595386565) delay(100);
-        for(;;) {
-            if (bluetoothAtivado) loop2();
-            else vTaskDelete(NULL);
-        }
-    }, "loop2", 10000, NULL, 1, NULL, 0);
+    pinMode(PINO_PLUVIOMETRO, INPUT_PULLDOWN);
 }
 
-time_t ligadoDesde;
-const auto limiteTempo = 1600548513;
 // O loop serve para analisar se alguma requisição foi recebida pelo Bluetooth
 void loop()
 {
     if (bluetoothAtivado) {
         auto atual = time(0);
-        if (SerialBT.available()) ProcessarRequisicaoBluetooth();
-        if (WiFi.status() == WL_CONNECTED && strlen(idEstacao) > 0 && registros.size() > 0 && atual - ultimaVarreduraMemoria > SECS_ENTRE_VARREDURAS) {
-            SerialBT.end();
-            bluetoothAtivado = false;
-            EnviarParaNuvem();
-            bluetoothAtivado = SerialBT.begin("Estacao");
-            ultimaVarreduraMemoria = atual;
+        if (digitalRead(PINO_PLUVIOMETRO)) {
+            registros.push_back(time(0));
+            delay(500);
         }
+        if (SerialBT.available()) ProcessarRequisicaoBluetooth();
         if (ligadoDesde < limiteTempo && atual > limiteTempo) {
             ligadoDesde = atual - ligadoDesde;
         }
-        if (atual - ligadoDesde > 30) {
+        if (atual - ligadoDesde > SECS_BT_ATIVADO) {
             SerialBT.end();
             btStop();
             bluetoothAtivado = false;
+            if (WiFi.status() == WL_CONNECTED && strlen(idEstacao) > 0 && registros.size() > 0) {
+                EnviarParaNuvem();
+                ultimaVarreduraMemoria = atual;
+            }
             //digitalWrite(2, LOW);
             WiFi.mode(WIFI_OFF);
             esp_sleep_enable_timer_wakeup(SECS_ENTRE_ACORDADAS * 1000000);
             esp_sleep_enable_ext1_wakeup(1 << PINO_PLUVIOMETRO, ESP_EXT1_WAKEUP_ANY_HIGH);
+            esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+            gpio_pullup_dis(PINO_PLUVIOMETRO);
+            gpio_pulldown_en(PINO_PLUVIOMETRO);
             esp_light_sleep_start();
         }
     } else {
@@ -179,7 +175,7 @@ void loop()
             ConectarRedeCadastrada();
             while (WiFi.status() != WL_CONNECTED)
                 if (time(0) - atual > 5) break;
-            if (WiFi.status() != WL_CONNECTED) {
+            if (WiFi.status() == WL_CONNECTED) {
                 EnviarParaNuvem();
                 ultimaVarreduraMemoria = atual;
             }
@@ -189,11 +185,4 @@ void loop()
         //digitalWrite(2, LOW);
         esp_light_sleep_start();
     }
-}
-
-void loop2() {
-    if (digitalRead(PINO_PLUVIOMETRO)) {
-        registros.push_back(time(0));
-        delay(500);
-    } else delay(10);
 }
