@@ -7,9 +7,9 @@
 
 // Definimos aqui qual o pino que será conectado ao pluviômetro
 #define PINO_PLUVIOMETRO GPIO_NUM_15
-#define SECS_ENTRE_VARREDURAS 60
-#define SECS_BT_ATIVADO 30
-#define SECS_ENTRE_ACORDADAS 600
+#define SECS_ENTRE_VARREDURAS 600
+#define SECS_BT_ATIVADO 600
+#define SECS_ENTRE_ACORDADAS 1200
 uint8_t newMACAddress[] = {0x32, 0xAE, 0xA4, 0x07, 0x0D, 0x66};
 
 DynamicJsonDocument Json(1024);
@@ -20,13 +20,11 @@ time_t ultimaVarreduraMemoria = 0;
 time_t ligadoDesde = 0;
 const time_t limiteTempo = 1600548513;
 
-bool bluetoothAtivado = false;
-
 char * idEstacao = new char[24];
 char * ssidWiFi = new char[32];
 char * senhaWiFi = new char[64];
 
-// Processamos as requisições
+// Processamos as requisições do aplicativo para configurar a estação
 void ProcessarRequisicaoBluetooth() {
     deserializeJson(Json, SerialBT.readString());
     const char* metodo = Json["metodo"];
@@ -37,9 +35,6 @@ void ProcessarRequisicaoBluetooth() {
         Json["ssidWiFi"] = ssidWiFi;
         Json["senhaWiFi"] = senhaWiFi;
         Json["possuiGPS"] = false;
-        JsonArray redesDisponiveis = Json.createNestedArray("redesDisponiveis");
-        int quant = WiFi.scanNetworks();
-        for (int i = 0; i < quant; i++) redesDisponiveis.add(WiFi.SSID(i));
     } else if (!strcmp(metodo, "SetDados")) {
         auto novaSenhaWifi = strdup(Json["senhaWiFi"]);
         auto novoSSIDWiFI = strdup(Json["ssidWiFi"]);
@@ -54,14 +49,14 @@ void ProcessarRequisicaoBluetooth() {
         preferences.putString("ssidWiFi", ssidWiFi);
         preferences.end();
 
-        if (attWifi) ConectarRedeCadastrada();
+        if (attWifi) WiFi.begin(ssidWiFi, senhaWiFi);
         Json.clear();
         Json["success"] = true;
     }
     else if (!strcmp(metodo, "GetStatus")) {
         Json.clear();
         Json["nuvemConectada"] = true;
-        Json["bluetoothAtivado"] = bluetoothAtivado;
+        Json["bluetoothAtivado"] = true;
         Json["relogioConfiguradoGPS"] = false;
         Json["relogioConfiguradoNTP"] = time(0) > limiteTempo;
         Json["wifiConectado"] = WiFi.status() == WL_CONNECTED;
@@ -85,27 +80,19 @@ void EnviarParaNuvem() {
         HTTPClient https;
         https.begin("https://us-central1-chuvasjampa.cloudfunctions.net/AdicionarRegistro");
         https.addHeader("Content-Type", "application/json");
-        bool sucesso = https.POST(envioC) == 201;
+        // Limpamos a memória se a operação bem sucedida
+        if (https.POST(envioC) == 201) registros.clear();
         https.end();
-        if (sucesso) {
-            // Operação bem sucedida, então limpamos a memória
-            registros.clear();
-        }
     }
     catch(const std::exception& e) { }
 }
 
-// Conectamos à rede cadastrada na memória
-void ConectarRedeCadastrada() {
-    if (strlen(senhaWiFi) >= 8)
-        WiFi.begin(ssidWiFi, senhaWiFi);
-}
-
-// Aqui é onde tudo começa, sendo apenas executado uma vez logo ao ligar
 void setup()
 {
-    Serial.begin(115200);
-
+    pinMode(2, OUTPUT);
+    digitalWrite(2, HIGH);
+    pinMode(PINO_PLUVIOMETRO, INPUT_PULLDOWN);
+    
     // Resgatar configurações salvas na memória
     preferences.begin("configs", true);
     preferences.getString("idEstacao", idEstacao, 24);
@@ -113,76 +100,68 @@ void setup()
     preferences.getString("senhaWiFi", senhaWiFi, 64);
     preferences.end();
     
-    bluetoothAtivado = SerialBT.begin("Estacao");
+    SerialBT.begin("Estacao");
     
     WiFi.mode(WIFI_STA);
     esp_wifi_set_mac(ESP_IF_WIFI_STA, &newMACAddress[0]);
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-        Serial.println("Olha eu aqui");
-        auto atual = time(0);
-        if (!atual < limiteTempo) {
-            try { configTime(-3 * 3600, 0, "pool.ntp.org"); }
-            catch(const std::exception& e) {}
-        }
+        try { configTime(-3 * 3600, 0, "pool.ntp.org"); }
+        catch(const std::exception& e) {}
     }, SYSTEM_EVENT_STA_GOT_IP);
-    ConectarRedeCadastrada();
+    WiFi.begin(ssidWiFi, senhaWiFi);
 
-    //pinMode(2, OUTPUT);
-    //digitalWrite(2, HIGH);
-
-    pinMode(PINO_PLUVIOMETRO, INPUT_PULLDOWN);
-}
-
-// O loop serve para analisar se alguma requisição foi recebida pelo Bluetooth
-void loop()
-{
-    if (bluetoothAtivado) {
-        auto atual = time(0);
+    time_t atual;
+    do {
+        atual = time(0);
         if (digitalRead(PINO_PLUVIOMETRO)) {
-            registros.push_back(time(0));
+            registros.push_back(atual);
             delay(500);
         }
         if (SerialBT.available()) ProcessarRequisicaoBluetooth();
-        if (ligadoDesde < limiteTempo && atual > limiteTempo) {
+        if (ligadoDesde < limiteTempo && atual > limiteTempo)
             ligadoDesde = atual - ligadoDesde;
-        }
-        if (atual - ligadoDesde > SECS_BT_ATIVADO) {
-            SerialBT.end();
-            btStop();
-            bluetoothAtivado = false;
-            if (WiFi.status() == WL_CONNECTED && strlen(idEstacao) > 0 && registros.size() > 0) {
-                EnviarParaNuvem();
-                ultimaVarreduraMemoria = atual;
-            }
-            //digitalWrite(2, LOW);
-            WiFi.mode(WIFI_OFF);
-            esp_sleep_enable_timer_wakeup(SECS_ENTRE_ACORDADAS * 1000000);
-            esp_sleep_enable_ext1_wakeup(1 << PINO_PLUVIOMETRO, ESP_EXT1_WAKEUP_ANY_HIGH);
-            esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-            gpio_pullup_dis(PINO_PLUVIOMETRO);
-            gpio_pulldown_en(PINO_PLUVIOMETRO);
-            esp_light_sleep_start();
-        }
-    } else {
-        //digitalWrite(2, HIGH);
-        auto atual = time(0);
-        auto motivo = esp_sleep_get_wakeup_cause();
-        if (motivo == ESP_SLEEP_WAKEUP_EXT1) {
-            registros.push_back(atual);
-        }
-        if (registros.size() > 0 && strlen(idEstacao) > 0 && atual - ultimaVarreduraMemoria > SECS_ENTRE_VARREDURAS) {
-            WiFi.mode(WIFI_STA);
-            ConectarRedeCadastrada();
-            while (WiFi.status() != WL_CONNECTED)
-                if (time(0) - atual > 5) break;
-            if (WiFi.status() == WL_CONNECTED) {
-                EnviarParaNuvem();
-                ultimaVarreduraMemoria = atual;
-            }
-            WiFi.mode(WIFI_OFF);
-        }
-        //delay(1000);
-        //digitalWrite(2, LOW);
-        esp_light_sleep_start();
+    } while (
+        atual - ligadoDesde < SECS_BT_ATIVADO
+        || strlen(idEstacao) <= 0
+        || strlen(ssidWiFi) <= 0
+        || strlen(senhaWiFi) < 8
+        || atual <= limiteTempo);
+
+    SerialBT.end();
+    btStop();
+    if (WiFi.status() == WL_CONNECTED && strlen(idEstacao) > 0 && registros.size() > 0) {
+        EnviarParaNuvem();
+        ultimaVarreduraMemoria = atual;
     }
+    WiFi.mode(WIFI_OFF);
+    esp_sleep_enable_timer_wakeup(SECS_ENTRE_ACORDADAS * 1000000);
+    esp_sleep_enable_ext1_wakeup(1 << PINO_PLUVIOMETRO, ESP_EXT1_WAKEUP_ANY_HIGH);
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+    gpio_pullup_dis(PINO_PLUVIOMETRO);
+    gpio_pulldown_en(PINO_PLUVIOMETRO);
+    
+    digitalWrite(2, LOW);
+    esp_light_sleep_start();
+}
+
+void loop()
+{
+    auto atual = time(0);
+    bool novoRegistro = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
+    if (novoRegistro) registros.push_back(atual);
+    if (registros.size() > 0 && atual - ultimaVarreduraMemoria > SECS_ENTRE_VARREDURAS) {
+        WiFi.mode(WIFI_STA);
+        WiFi.begin(ssidWiFi, senhaWiFi);
+        while (WiFi.status() != WL_CONNECTED) {
+            if (time(0) - atual > 4) break;
+            else delay(100);
+        }
+        if (WiFi.status() == WL_CONNECTED) {
+            EnviarParaNuvem();
+            ultimaVarreduraMemoria = atual;
+        }
+        WiFi.mode(WIFI_OFF);
+    }
+    else if (novoRegistro) delay(500);
+    esp_light_sleep_start();
 }
