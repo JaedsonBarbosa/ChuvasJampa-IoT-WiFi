@@ -8,7 +8,7 @@
 
 // Definimos aqui qual o pino que será conectado ao pluviômetro
 #define PINO_PLUVIOMETRO GPIO_NUM_15
-#define SECS_ENTRE_VARREDURAS 1200
+#define SECS_ENTRE_VARREDURAS 600
 #define SECS_BT_ATIVADO 600
 #define SECS_ENTRE_ACORDADAS 1800
 #define EXIBIR_LOG false
@@ -126,7 +126,6 @@ void setup()
     Serial.begin(115200);
     #endif
     pinMode(2, OUTPUT);
-    digitalWrite(2, HIGH);
     pinMode(PINO_PLUVIOMETRO, INPUT_PULLDOWN);
     
     // Resgatar configurações salvas na memória
@@ -142,11 +141,23 @@ void setup()
     esp_wifi_set_mac(ESP_IF_WIFI_STA, &newMACAddress[0]);
     WiFi.begin(ssidWiFi, senhaWiFi);
 
+    timeClient.setTimeOffset(-3);
+    bool wifiConectado = false;
+    bool ledLigado = false;
     time_t atual;
     do {
-        timeClient.update();
+        if (!wifiConectado && WiFi.status() == WL_CONNECTED) {
+            wifiConectado = true;
+            timeClient.begin();
+        }
+        else if (wifiConectado) {
+            timeClient.update();
+        }
         atual = timeClient.getEpochTime();
-        if (digitalRead(PINO_PLUVIOMETRO)) {
+        if (!ledLigado && atual > limiteTempo) {
+            digitalWrite(2, HIGH);
+        }
+        if (digitalRead(PINO_PLUVIOMETRO) && atual > limiteTempo) {
             registros.push_back(atual);
             delay(500);
         }
