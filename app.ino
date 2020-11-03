@@ -5,12 +5,15 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <NTPClient.h>
+#include "segredos.h"
+#include <WiFiClientSecure.h>
+#include <MQTTClient.h>
 
 // Definimos aqui qual o pino que será conectado ao pluviômetro
 #define PINO_PLUVIOMETRO GPIO_NUM_15
-#define SECS_ENTRE_VARREDURAS 600
-#define SECS_BT_ATIVADO 600
-#define SECS_ENTRE_ACORDADAS 1800
+#define SECS_ENTRE_VARREDURAS 6
+#define SECS_BT_ATIVADO 6
+#define SECS_ENTRE_ACORDADAS 18
 #define EXIBIR_LOG false
 uint8_t newMACAddress[] = {0x32, 0xAE, 0xA4, 0x07, 0x0D, 0x66};
 
@@ -28,6 +31,8 @@ char * senhaWiFi = new char[64];
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
+WiFiClientSecure net = WiFiClientSecure();
+MQTTClient client = MQTTClient(256);
 
 // Processamos as requisições do aplicativo para configurar a estação
 void ProcessarRequisicaoBluetooth() {
@@ -82,11 +87,8 @@ void EnviarParaNuvem() {
     {
         char envioC[1024];
         serializeJson(Json, envioC, 1024);
-        HTTPClient https;
-        https.begin("https://us-central1-chuvasjampa.cloudfunctions.net/AdicionarRegistro");
-        https.addHeader("Content-Type", "application/json");
         // Limpamos a memória se a operação bem sucedida
-        if (https.POST(envioC) == 201) {
+        if (client.publish(AWS_IOT_PUBLISH_TOPIC, envioC)) {
             auto inicio = registros.begin();
             if (datashoras.size() == registros.size()) {
                 registros.clear();
@@ -101,7 +103,6 @@ void EnviarParaNuvem() {
                 #endif
             }
         }
-        https.end();
     }
     catch(const std::exception& e) { }
 }
@@ -134,6 +135,10 @@ void setup()
     preferences.getString("ssidWiFi", ssidWiFi, 32);
     preferences.getString("senhaWiFi", senhaWiFi, 64);
     preferences.end();
+
+    net.setCACert(AWS_CERT_CA);
+	net.setCertificate(AWS_CERT_CRT);
+	net.setPrivateKey(AWS_CERT_PRIVATE);
     
     SerialBT.begin("Estacao");
     
@@ -173,7 +178,9 @@ void setup()
 
     SerialBT.end();
     btStop();
-    if (WiFi.status() == WL_CONNECTED && strlen(idEstacao) > 0 && registros.size() > 0) {
+
+    client.begin(AWS_IOT_ENDPOINT, 8883, net);
+    if (WiFi.status() == WL_CONNECTED && registros.size() > 0 && aguardarConexaoAWS()) {
         EnviarParaNuvem();
         ultimaVarreduraMemoria = atual;
     }
@@ -189,10 +196,17 @@ void setup()
     esp_light_sleep_start();
 }
 
-bool aguardarConexao(unsigned long inicio) {
+bool aguardarConexaoWiFi() {
     int i = 0;
-    while (WiFi.status() != WL_CONNECTED && i < 40) delay(100);
+    while (WiFi.status() != WL_CONNECTED && i++ < 40) delay(100);
     return WiFi.status() == WL_CONNECTED;
+}
+
+bool aguardarConexaoAWS() {
+    if (client.connected()) return true;
+    int i = 0;
+    while (!client.connect(THINGNAME) && i++ < 100) delay(100);
+    return client.connected();
 }
 
 void loop()
@@ -203,7 +217,7 @@ void loop()
     if (atual - ultimaVarreduraMemoria > SECS_ENTRE_VARREDURAS) {
         WiFi.mode(WIFI_STA);
         WiFi.begin(ssidWiFi, senhaWiFi);
-        if (aguardarConexao(atual)) {
+        if (aguardarConexaoWiFi()) {
             timeClient.update();
             auto tempoEspera = (millis() - momentoInicio) / 1000;
             atual = timeClient.getEpochTime() - tempoEspera;
@@ -215,7 +229,7 @@ void loop()
                 Serial.println("REGISTRADO 1");
                 #endif
             }
-            if (registros.size() > 0) {
+            if (registros.size() > 0 && aguardarConexaoAWS()) {
                 #if EXIBIR_LOG
                 Serial.println("ENVIANDO");
                 #endif
