@@ -11,9 +11,9 @@
 
 // Definimos aqui qual o pino que será conectado ao pluviômetro
 #define PINO_PLUVIOMETRO GPIO_NUM_15
-#define SECS_ENTRE_VARREDURAS 6
-#define SECS_BT_ATIVADO 6
-#define SECS_ENTRE_ACORDADAS 18
+#define SECS_ENTRE_VARREDURAS 600
+#define SECS_BT_ATIVADO 600
+#define SECS_ENTRE_ACORDADAS 1800
 #define EXIBIR_LOG false
 uint8_t newMACAddress[] = {0x32, 0xAE, 0xA4, 0x07, 0x0D, 0x66};
 
@@ -24,6 +24,7 @@ std::vector<time_t> registros;
 time_t ultimaVarreduraMemoria = 0;
 time_t ligadoDesde = 0;
 const time_t limiteTempo = 1600548513;
+bool ignorarAlertaVida = false;
 
 char * idEstacao = new char[24];
 char * ssidWiFi = new char[32];
@@ -78,7 +79,7 @@ void ProcessarRequisicaoBluetooth() {
 }
 
 // Registramos tudo na nuvem
-void EnviarParaNuvem() {
+void EnviarRegistrosParaNuvem() {
     Json.clear();
     Json["idEstacao"] = idEstacao;
     JsonArray datashoras = Json.createNestedArray("datashoras");
@@ -89,19 +90,37 @@ void EnviarParaNuvem() {
         serializeJson(Json, envioC, 1024);
         // Limpamos a memória se a operação bem sucedida
         if (client.publish(AWS_IOT_PUBLISH_TOPIC, envioC)) {
-            auto inicio = registros.begin();
+            ignorarAlertaVida = true;
             if (datashoras.size() == registros.size()) {
                 registros.clear();
                 #if EXIBIR_LOG
-                Serial.println("LIMPEZA COMPLETA");
+                Serial.println("Removidos todos os registros");
                 #endif
-            }
-            else {
+            } else {
+                auto inicio = registros.begin();
                 registros.erase(inicio, inicio + datashoras.size());
                 #if EXIBIR_LOG
-                Serial.println("LIMPEZA PARCIAL");
+                Serial.println("Removidos registros enviados");
                 #endif
             }
+        }
+    }
+    catch(const std::exception& e) { }
+}
+
+void IndicarVidaParaNuvem(time_t tempo) {
+    Json.clear();
+    Json["idEstacao"] = idEstacao;
+    Json["datahora"] = tempo;
+    try
+    {
+        char envioC[1024];
+        serializeJson(Json, envioC, 1024);
+        if (client.publish(AWS_IOT_PUBLISH_TOPIC, envioC)) {
+            ignorarAlertaVida = true;
+            #if EXIBIR_LOG
+            Serial.println("Enviado sinal de vida.");
+            #endif
         }
     }
     catch(const std::exception& e) { }
@@ -116,7 +135,7 @@ void RegistroExtra() {
         liberadaInterrupcao = false;
         registros.push_back(atual);
         #if EXIBIR_LOG
-        Serial.println("REGISTRADO 0");
+        Serial.println("Registrado na interrupcao");
         #endif
     }
 }
@@ -181,7 +200,7 @@ void setup()
 
     client.begin(AWS_IOT_ENDPOINT, 8883, net);
     if (WiFi.status() == WL_CONNECTED && registros.size() > 0 && aguardarConexaoAWS()) {
-        EnviarParaNuvem();
+        EnviarRegistrosParaNuvem();
         ultimaVarreduraMemoria = atual;
     }
     WiFi.mode(WIFI_OFF);
@@ -226,18 +245,30 @@ void loop()
             if (novoRegistro) {
                 registros.push_back(atual);
                 #if EXIBIR_LOG
-                Serial.println("REGISTRADO 1");
+                Serial.println("Registrado no metodo principal antes de envio");
                 #endif
             }
-            if (registros.size() > 0 && aguardarConexaoAWS()) {
-                #if EXIBIR_LOG
-                Serial.println("ENVIANDO");
-                #endif
-                EnviarParaNuvem();
-                #if EXIBIR_LOG
-                Serial.println("ENVIADO");
-                #endif
+            auto temRegistros = registros.size() > 0;
+            if ((temRegistros || !ignorarAlertaVida) && aguardarConexaoAWS()) {
+                if (temRegistros){
+                    #if EXIBIR_LOG
+                    Serial.println("Enviado registros");
+                    #endif
+                    EnviarRegistrosParaNuvem();
+                    #if EXIBIR_LOG
+                    Serial.println("Registros enviados");
+                    #endif
+                } else {
+                    #if EXIBIR_LOG
+                    Serial.println("Indicando vida");
+                    #endif
+                    IndicarVidaParaNuvem(atual);
+                    #if EXIBIR_LOG
+                    Serial.println("Vida indicada");
+                    #endif
+                }
             }
+            else if (ignorarAlertaVida) ignorarAlertaVida = false;
             liberadaInterrupcao = false;
         }
         ultimaVarreduraMemoria = atual;
@@ -246,7 +277,7 @@ void loop()
     else if (novoRegistro) {
         registros.push_back(atual);
         #if EXIBIR_LOG
-        Serial.println("REGISTRADO 2");
+        Serial.println("Registrado no metodo principal");
         #endif
     }
     auto tempoDecorrido = millis() - momentoInicio;
